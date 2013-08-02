@@ -1268,16 +1268,19 @@
 		//Will be recalculated by _updateDependentKeyFrames.
 		_maxKeyFrame = 0;
 
+		var size = _scrollHorizontal ? 'width' : 'height';
+
 		if(_forceHeight && !_isMobile) {
 			//un-"force" the height to not mess with the calculations in _updateDependentKeyFrames (#216).
-			body.style.height = 'auto';
+			body.style[size] = 'auto';
 		}
 
 		_updateDependentKeyFrames();
 
 		if(_forceHeight && !_isMobile) {
 			//"force" the height.
-			body.style.height = (_maxKeyFrame + documentElement.clientHeight) + 'px';
+			var clientSize = _scrollHorizontal ? documentElement.clientWidth : documentElement.clientHeight;
+			body.style[size] = (_maxKeyFrame + clientSize) + 'px';
 		}
 
 		//The scroll offset may now be larger than needed (on desktop the browser/os prevents scrolling farther than the bottom).
