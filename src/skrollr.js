@@ -249,7 +249,7 @@
 
 		//Dummy object. Will be overwritten in the _render method when smooth scrolling is calculated.
 		_smoothScrolling = {
-			targetTop: _instance.getScrollTop()
+			targetTop: _instance.getScrollPosition()
 		};
 
 		//A custom check function may be passed.
@@ -270,6 +270,8 @@
 		} else {
 			_updateClass(documentElement, [SKROLLR_CLASS, SKROLLR_DESKTOP_CLASS], [NO_SKROLLR_CLASS]);
 		}
+
+		_scrollHorizontal = options.horizontal === true;
 
 		//Triggers parsing of elements and a first reflow.
 		_instance.refresh();
@@ -490,7 +492,7 @@
 		}
 
 		//Compensate scrolling since getBoundingClientRect is relative to viewport.
-		absolute += _instance.getScrollTop();
+		absolute += _instance.getScrollPosition();
 
 		return (absolute + 0.5) | 0;
 	};
@@ -502,7 +504,7 @@
 		options = options || {};
 
 		var now = _now();
-		var scrollTop = _instance.getScrollTop();
+		var scrollTop = _instance.getScrollPosition();
 
 		//Setting this to a new value will automatically cause the current animation to stop, if any.
 		_scrollAnimation = {
@@ -562,11 +564,16 @@
 		return _instance;
 	};
 
-	Skrollr.prototype.getScrollTop = function() {
+	Skrollr.prototype.getScrollPosition = function() {
 		if(_isMobile) {
 			return _mobileOffset;
 		} else {
-			return window.pageYOffset || documentElement.scrollTop || body.scrollTop || 0;
+			if (!_scrollHorizontal) {
+				return window.pageYOffset || documentElement.scrollTop || body.scrollTop || 0;
+			} else {
+				return window.pageXOffset || documentElement.scrollLeft || body.scrollLeft || 0;
+			}
+			
 		}
 	};
 
@@ -658,7 +665,7 @@
 
 					var duration = Math.abs(speed / MOBILE_DECELERATION);
 					var targetOffset = speed * duration + 0.5 * MOBILE_DECELERATION * duration * duration;
-					var targetTop = _instance.getScrollTop() - targetOffset;
+					var targetTop = _instance.getScrollPosition() - targetOffset;
 
 					//Relative duration change for when scrolling above bounds.
 					var targetRatio = 0;
@@ -736,7 +743,7 @@
 		}
 
 		//#133: The document can be larger than the maxKeyFrame we found.
-		_maxKeyFrame = Math.max(_maxKeyFrame, _getDocumentHeight());
+		_maxKeyFrame = Math.max(_maxKeyFrame, _getDocumentSize());
 
 		//Now process all data-end keyframes.
 		skrollableIndex = 0;
@@ -864,7 +871,7 @@
 	 */
 	var _render = function() {
 		//We may render something else than the actual scrollbar position.
-		var renderTop = _instance.getScrollTop();
+		var renderTop = _instance.getScrollPosition();
 
 		//If there's an animation, which ends in current render call, call the callback after rendering.
 		var afterAnimationCallback;
@@ -937,7 +944,7 @@
 			//The beforerender listener function is able the cancel rendering.
 			if(continueRendering !== false) {
 				//Now actually interpolate all the styles.
-				_calcSteps(renderTop, _instance.getScrollTop());
+				_calcSteps(renderTop, _instance.getScrollPosition());
 
 				//Remember when we last rendered.
 				_lastTop = renderTop;
@@ -1256,7 +1263,7 @@
 	};
 
 	var _reflow = function() {
-		var pos = _instance.getScrollTop();
+		var pos = _instance.getScrollPosition();
 
 		//Will be recalculated by _updateDependentKeyFrames.
 		_maxKeyFrame = 0;
@@ -1275,7 +1282,7 @@
 
 		//The scroll offset may now be larger than needed (on desktop the browser/os prevents scrolling farther than the bottom).
 		if(_isMobile) {
-			_instance.setScrollTop(Math.min(_instance.getScrollTop(), _maxKeyFrame));
+			_instance.setScrollTop(Math.min(_instance.getScrollPosition(), _maxKeyFrame));
 		} else {
 			//Remember and reset the scroll pos (#217).
 			_instance.setScrollTop(pos, true);
@@ -1287,11 +1294,16 @@
 	/*
 	 * Returns the height of the document.
 	 */
-	var _getDocumentHeight = function() {
-		var skrollrBodyHeight = (_skrollrBody && _skrollrBody.offsetHeight || 0);
-		var bodyHeight = Math.max(skrollrBodyHeight, body.scrollHeight, body.offsetHeight, documentElement.scrollHeight, documentElement.offsetHeight, documentElement.clientHeight);
-
-		return bodyHeight - documentElement.clientHeight;
+	var _getDocumentSize = function() {
+		if (!_scrollHorizontal) {
+			var skrollrBodyHeight = (_skrollrBody && _skrollrBody.offsetHeight || 0);
+			var bodyHeight = Math.max(skrollrBodyHeight, body.scrollHeight, body.offsetHeight, documentElement.scrollHeight, documentElement.offsetHeight, documentElement.clientHeight);
+			return bodyHeight - documentElement.clientHeight;
+		} else {
+			var skrollrBodyWidth = (_skrollrBody && _skrollrBody.offsetWidth || 0);
+			var bodyWidth = Math.max(skrollrBodyWidth, body.scrollWidth, body.offsetWidth, documentElement.scrollWidth, documentElement.offsetWidth, documentElement.clientWidth);
+			return bodyWidth - documentElement.clientWidth;
+		}
 	};
 
 	/**
@@ -1458,6 +1470,9 @@
 
 	//Mobile specific vars. Will be stripped by UglifyJS when not in use.
 	var _isMobile = false;
+
+	// Horizontal scrolling option.
+	var _scrollHorizontal = false;
 
 	//The virtual scroll offset when using mobile scrolling.
 	var _mobileOffset = 0;
