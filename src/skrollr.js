@@ -601,7 +601,9 @@
 		var currentTouchY;
 		var currentTouchX;
 		var lastTouchY;
+		var lastTouchX;
 		var deltaY;
+		var deltaX;
 
 		var initialTouchTime;
 		var currentTouchTime;
@@ -628,17 +630,20 @@
 
 					initialElement = e.target;
 					initialTouchY = lastTouchY = currentTouchY;
-					initialTouchX = currentTouchX;
+					initialTouchX = lastTouchX = currentTouchX;
 					initialTouchTime = currentTouchTime;
 
 					break;
 				case EVENT_TOUCHMOVE:
 					deltaY = currentTouchY - lastTouchY;
+					deltaX = currentTouchX - lastTouchX;
 					deltaTime = currentTouchTime - lastTouchTime;
 
-					_instance.setScrollPosition(_mobileOffset - deltaY, true);
+					var position = _mobileOffset - (!_scrollHorizontal ? deltaY : deltaX);
+					_instance.setScrollPosition(position, true);
 
 					lastTouchY = currentTouchY;
+					lastTouchX = currentTouchX;
 					lastTouchTime = currentTouchTime;
 					break;
 				default:
@@ -659,7 +664,7 @@
 
 					initialElement = undefined;
 
-					var speed = deltaY / deltaTime;
+					var speed = (!_scrollHorizontal ? deltaY : deltaX) / deltaTime;
 
 					//Cap speed at 3 pixel/ms.
 					speed = Math.max(Math.min(speed, 3), -3);
@@ -922,7 +927,9 @@
 		//That's were we actually "scroll" on mobile.
 		if(_isMobile && _skrollrBody) {
 			//Set the transform ("scroll it").
-			skrollr.setStyle(_skrollrBody, 'transform', 'translate(0, ' + -(_mobileOffset) + 'px) ' + _translateZ);
+			var coords = [0, -_mobileOffset + 'px']
+			if (_scrollHorizontal) coords.reverse()
+			skrollr.setStyle(_skrollrBody, 'transform', 'translate(' + coords.join(', ') + ') ' + _translateZ);
 		}
 
 		//Did the scroll position even change?
