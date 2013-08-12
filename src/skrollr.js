@@ -548,7 +548,7 @@
 		return !!_scrollAnimation;
 	};
 
-	Skrollr.prototype.setScrollTop = function(top, force) {
+	Skrollr.prototype.setScrollPosition = function(top, force) {
 		//Don't do smooth scrolling (last top === new top).
 		if(force === true) {
 			_lastTop = top;
@@ -558,7 +558,8 @@
 		if(_isMobile) {
 			_mobileOffset = Math.min(Math.max(top, 0), _maxKeyFrame);
 		} else {
-			window.scrollTo(0, top);
+			if (!_scrollHorizontal) window.scrollTo(0, top);
+			else window.scrollTo(top, 0);
 		}
 
 		return _instance;
@@ -635,7 +636,7 @@
 					deltaY = currentTouchY - lastTouchY;
 					deltaTime = currentTouchTime - lastTouchTime;
 
-					_instance.setScrollTop(_mobileOffset - deltaY, true);
+					_instance.setScrollPosition(_mobileOffset - deltaY, true);
 
 					lastTouchY = currentTouchY;
 					lastTouchTime = currentTouchTime;
@@ -794,7 +795,7 @@
 			//If we are before/after the first/last frame, set the styles according to the given edge strategy.
 			if(beforeFirst || afterLast) {
 				//Check if we already handled this edge case last time.
-				//Note: using setScrollTop it's possible that we jumped from one edge to the other.
+				//Note: using setScrollPosition it's possible that we jumped from one edge to the other.
 				if(beforeFirst && skrollable.edge === -1 || afterLast && skrollable.edge === 1) {
 					continue;
 				}
@@ -892,7 +893,7 @@
 				renderTop = (_scrollAnimation.startTop + progress * _scrollAnimation.topDiff) | 0;
 			}
 
-			_instance.setScrollTop(renderTop, true);
+			_instance.setScrollPosition(renderTop, true);
 		}
 		//Smooth scrolling only if there's no animation running and if we're not on mobile.
 		else if(!_isMobile) {
@@ -927,7 +928,7 @@
 		//Did the scroll position even change?
 		if(_forceRender || _lastTop !== renderTop) {
 			//Remember in which direction are we scrolling?
-			_direction = (renderTop >= _lastTop) ? 'down' : 'up';
+			_direction = (renderTop >= _lastTop) ? 'forward' : 'back';
 
 			_forceRender = false;
 
@@ -1285,10 +1286,10 @@
 
 		//The scroll offset may now be larger than needed (on desktop the browser/os prevents scrolling farther than the bottom).
 		if(_isMobile) {
-			_instance.setScrollTop(Math.min(_instance.getScrollPosition(), _maxKeyFrame));
+			_instance.setScrollPosition(Math.min(_instance.getScrollPosition(), _maxKeyFrame));
 		} else {
 			//Remember and reset the scroll pos (#217).
-			_instance.setScrollTop(pos, true);
+			_instance.setScrollPosition(pos, true);
 		}
 
 		_forceRender = true;
@@ -1442,8 +1443,8 @@
 	var _scale = 1;
 	var _constants;
 
-	//Current direction (up/down).
-	var _direction = 'down';
+	//Current direction (forward/back).
+	var _direction = 'forward';
 
 	//The last top offset value. Needed to determine direction.
 	var _lastTop = -1;
