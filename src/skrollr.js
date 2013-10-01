@@ -19,7 +19,7 @@
 		init: function(options) {
 			return _instance || new Skrollr(options);
 		},
-		VERSION: '0.6.9'
+		VERSION: '0.6.13'
 	};
 
 	//Minify optimization.
@@ -48,7 +48,7 @@
 
 	var DEFAULT_EASING = 'linear';
 	var DEFAULT_DURATION = 1000;//ms
-	var MOBILE_DECELERATION = 0.0006;//pixel/ms²
+	var DEFAULT_MOBILE_DECELERATION = 0.0006;//pixel/ms²
 
 	var DEFAULT_SMOOTH_SCROLLING_DURATION = 200;//ms
 
@@ -63,8 +63,7 @@
 	var rxTrim = /^\s+|\s+$/g;
 
 	//Find all data-attributes. data-[_constant]-[offset]-[anchor]-[anchor].
-	var rxKeyframeAttribute = /^data(?:-(_\w+))?(?:-?(-?\d+))?(?:-?(start|end|top|center|bottom))?(?:-?(top|center|bottom))?$/;
-
+	var rxKeyframeAttribute = /^data(?:-(_\w+))?(?:-?(-?\d*\.?\d+p?))?(?:-?(start|end|top|center|bottom))?(?:-?(top|center|bottom))?$/;
 	var rxPropValue = /\s*([\w\-\[\]]+)\s*:\s*(.+?)\s*(?:;|$)/gi;
 
 	//Easing function names follow the property in square brackets.
@@ -149,7 +148,7 @@
 				var deltaTime = _now() - lastTime;
 				var delay = Math.max(0, 1000 / 60 - deltaTime);
 
-				window.setTimeout(function() {
+				return window.setTimeout(function() {
 					lastTime = _now();
 					callback();
 				}, delay);
@@ -157,6 +156,18 @@
 		}
 
 		return requestAnimFrame;
+	};
+
+	var polyfillCAF = function() {
+		var cancelAnimFrame = window.cancelAnimationFrame || window[theCSSPrefix.toLowerCase() + 'CancelAnimationFrame'];
+
+		if(_isMobile || !cancelAnimFrame) {
+			cancelAnimFrame = function(timeout) {
+				return window.clearTimeout(timeout);
+			};
+		}
+
+		return cancelAnimFrame;
 	};
 
 	//Built-in easing functions.
@@ -244,6 +255,8 @@
 			_scale = options.scale || 1;
 		}
 
+		_mobileDeceleration = options.mobileDeceleration || DEFAULT_MOBILE_DECELERATION;
+
 		_smoothScrollingEnabled = options.smoothScrolling !== false;
 		_smoothScrollingDuration = options.smoothScrollingDuration || DEFAULT_SMOOTH_SCROLLING_DURATION;
 
@@ -276,14 +289,26 @@
 		//Triggers parsing of elements and a first reflow.
 		_instance.refresh();
 
-		_addEvent(window, 'resize orientationchange', _reflow);
+		_addEvent(window, 'resize orientationchange', function() {
+			var width = documentElement.clientWidth;
+			var height = documentElement.clientHeight;
+
+			//Only reflow if the size actually changed (#271).
+			if(height !== _lastViewportHeight || width !== _lastViewportWidth) {
+				_lastViewportHeight = height;
+				_lastViewportWidth = width;
+
+				_requestReflow = true;
+			}
+		});
+
 
 		var requestAnimFrame = polyfillRAF();
 
 		//Let's go.
 		(function animloop(){
 			_render();
-			requestAnimFrame(animloop);
+			_animFrame = requestAnimFrame(animloop);
 		}());
 
 		return _instance;
@@ -366,19 +391,7 @@
 					continue;
 				}
 
-				var constant = match[1];
-
-				//If there is a constant, get it's value or fall back to 0.
-				constant = constant && _constants[constant.substr(1)] || 0;
-
-				//Parse key frame offset. If undefined will be casted to 0.
-				var offset = (match[2] | 0) + constant;
-				var anchor1 = match[3];
-				//If second anchor is not set, the first will be taken for both.
-				var anchor2 = match[4] || anchor1;
-
 				var kf = {
-					offset: offset,
 					props: attr.value,
 					//Point back to the element as well.
 					element: el
@@ -386,17 +399,39 @@
 
 				keyFrames.push(kf);
 
+				var constant = match[1];
+
+				//If there is a constant, get it's value or fall back to 0.
+				constant = constant && _constants[constant.substr(1)] || 0;
+
+				//Parse key frame offset. If undefined will be casted to 0.
+				var offset = match[2];
+
+				//Is it a percentage offset?
+				if(/p$/.test(offset)) {
+					kf.isPercentage = true;
+					kf.offset = ((offset.slice(0, -1) | 0) + constant) / 100;
+				} else {
+					kf.offset = (offset | 0) + constant;
+				}
+
+				var anchor1 = match[3];
+
+				//If second anchor is not set, the first will be taken for both.
+				var anchor2 = match[4] || anchor1;
+
+
 				//"absolute" (or "classic") mode, where numbers mean absolute scroll offset.
 				if(!anchor1 || anchor1 === ANCHOR_START || anchor1 === ANCHOR_END) {
 					kf.mode = 'absolute';
 
-					//data-end needs to be calculated after all key frames are know.
+					//data-end needs to be calculated after all key frames are known.
 					if(anchor1 === ANCHOR_END) {
 						kf.isEnd = true;
-					} else {
+					} else if(!kf.isPercentage) {
 						//For data-start we can already set the key frame w/o calculations.
 						//#59: "scale" options should only affect absolute mode.
-						kf.frame = offset * _scale;
+						kf.frame = kf.offset * _scale;
 
 						delete kf.offset;
 					}
@@ -558,8 +593,12 @@
 		if(_isMobile) {
 			_mobileOffset = Math.min(Math.max(top, 0), _maxKeyFrame);
 		} else {
-			if (!_scrollHorizontal) window.scrollTo(0, top);
-			else window.scrollTo(top, 0);
+			if (!_scrollHorizontal) {
+				window.scrollTo(0, top);
+			}
+			else {
+				window.scrollTo(top, 0);
+			}
 		}
 
 		return _instance;
@@ -574,7 +613,6 @@
 			} else {
 				return window.pageXOffset || documentElement.scrollLeft || body.scrollLeft || 0;
 			}
-			
 		}
 	};
 
@@ -588,6 +626,52 @@
 		delete _listeners[name];
 
 		return _instance;
+	};
+
+	Skrollr.prototype.destroy = function() {
+		var cancelAnimFrame = polyfillCAF();
+		cancelAnimFrame(_animFrame);
+		_removeAllEvents();
+
+		_updateClass(documentElement, [NO_SKROLLR_CLASS], [SKROLLR_CLASS, SKROLLR_DESKTOP_CLASS, SKROLLR_MOBILE_CLASS]);
+
+		var skrollableIndex = 0;
+		var skrollablesLength = _skrollables.length;
+
+		for(; skrollableIndex < skrollablesLength; skrollableIndex++) {
+			_reset(_skrollables[skrollableIndex].element);
+		}
+
+		documentElement.style.overflow = body.style.overflow = 'auto';
+		documentElement.style.height = body.style.height = 'auto';
+
+		if(_skrollrBody) {
+			skrollr.setStyle(_skrollrBody, 'transform', 'none');
+		}
+
+		_instance = undefined;
+		_skrollrBody = undefined;
+		_listeners = undefined;
+		_forceHeight = undefined;
+		_maxKeyFrame = 0;
+		_scale = 1;
+		_constants = undefined;
+		_mobileDeceleration = undefined;
+		_direction = 'down';
+		_lastTop = -1;
+		_lastViewportWidth = 0;
+		_lastViewportHeight = 0;
+		_requestReflow = false;
+		_scrollAnimation = undefined;
+		_smoothScrollingEnabled = undefined;
+		_smoothScrollingDuration = undefined;
+		_smoothScrolling = undefined;
+		_forceRender = undefined;
+		_skrollableIdCounter = 0;
+		_edgeStrategy = undefined;
+		_isMobile = false;
+		_mobileOffset = 0;
+		_translateZ = undefined;
 	};
 
 	/*
@@ -669,8 +753,8 @@
 					//Cap speed at 3 pixel/ms.
 					speed = Math.max(Math.min(speed, 3), -3);
 
-					var duration = Math.abs(speed / MOBILE_DECELERATION);
-					var targetOffset = speed * duration + 0.5 * MOBILE_DECELERATION * duration * duration;
+					var duration = Math.abs(speed / _mobileDeceleration);
+					var targetOffset = speed * duration + 0.5 * _mobileDeceleration * duration * duration;
 					var targetTop = _instance.getScrollPosition() - targetOffset;
 
 					//Relative duration change for when scrolling above bounds.
@@ -730,10 +814,20 @@
 			for(; keyFrameIndex < keyFramesLength; keyFrameIndex++) {
 				kf = keyFrames[keyFrameIndex];
 
+				var offset = kf.offset;
+
+				if(kf.isPercentage) {
+					//Convert the offset to percentage of the viewport height.
+					offset = offset * documentElement.clientHeight;
+
+					//Absolute + percentage mode.
+					kf.frame = offset;
+				}
+
 				if(kf.mode === 'relative') {
 					_reset(element);
 
-					kf.frame = _instance.relativeToAbsolute(anchorTarget, kf.anchors[0], kf.anchors[1]) - kf.offset;
+					kf.frame = _instance.relativeToAbsolute(anchorTarget, kf.anchors[0], kf.anchors[1]) - offset;
 
 					_reset(element, true);
 				}
@@ -876,6 +970,11 @@
 	 * Renders all elements.
 	 */
 	var _render = function() {
+    if(_requestReflow) {
+			_requestReflow = false;
+			_reflow();
+		}
+
 		//We may render something else than the actual scrollbar position.
 		var renderTop = _instance.getScrollPosition();
 
@@ -927,8 +1026,10 @@
 		//That's were we actually "scroll" on mobile.
 		if(_isMobile && _skrollrBody) {
 			//Set the transform ("scroll it").
-			var coords = [0, -_mobileOffset + 'px']
-			if (_scrollHorizontal) coords.reverse()
+			var coords = [0, -_mobileOffset + 'px'];
+			if (_scrollHorizontal) {
+				coords.reverse();
+			}
 			skrollr.setStyle(_skrollrBody, 'transform', 'translate(' + coords.join(', ') + ') ' + _translateZ);
 		}
 
@@ -1258,16 +1359,55 @@
 
 		names = names.split(' ');
 
+    var name;
 		var nameCounter = 0;
 		var namesLength = names.length;
 
 		for(; nameCounter < namesLength; nameCounter++) {
+			name = names[nameCounter];
+
 			if(element.addEventListener) {
-				element.addEventListener(names[nameCounter], callback, false);
+				element.addEventListener(name, callback, false);
 			} else {
-				element.attachEvent('on' + names[nameCounter], intermediate);
+				element.attachEvent('on' + name, intermediate);
+			}
+
+      //Remember the events to be able to flush them later.
+			_registeredEvents.push({
+				element: element,
+				name: name,
+				listener: callback
+			});
+		}
+	};
+
+	var _removeEvent = skrollr.removeEvent = function(element, names, callback) {
+		names = names.split(' ');
+
+		var nameCounter = 0;
+		var namesLength = names.length;
+
+		for(; nameCounter < namesLength; nameCounter++) {
+			if(element.removeEventListener) {
+				element.removeEventListener(names[nameCounter], callback, false);
+			} else {
+				element.detachEvent('on' + names[nameCounter], callback);
 			}
 		}
+	};
+
+	var _removeAllEvents = function() {
+		var eventData;
+		var eventCounter = 0;
+		var eventsLength = _registeredEvents.length;
+
+		for(; eventCounter < eventsLength; eventCounter++) {
+			eventData = _registeredEvents[eventCounter];
+
+			_removeEvent(eventData.element, eventData.name, eventData.listener);
+		}
+
+		_registeredEvents = [];
 	};
 
 	var _reflow = function() {
@@ -1450,6 +1590,8 @@
 	var _scale = 1;
 	var _constants;
 
+  var _mobileDeceleration;
+
 	//Current direction (forward/back).
 	var _direction = 'forward';
 
@@ -1458,6 +1600,12 @@
 
 	//The last time we called the render method (doesn't mean we rendered!).
 	var _lastRenderCall = _now();
+
+  //For detecting if it actually resized (#271).
+	var _lastViewportWidth = 0;
+	var _lastViewportHeight = 0;
+
+	var _requestReflow = false;
 
 	//Will contain data about a running scrollbar animation, if any.
 	var _scrollAnimation;
@@ -1490,4 +1638,11 @@
 
 	//If the browser supports 3d transforms, this will be filled with 'translateZ(0)' (empty string otherwise).
 	var _translateZ;
+
+  //Will contain data about registered events by skrollr.
+	var _registeredEvents = [];
+
+	//Animation frame id returned by RequestAnimationFrame (or timeout when RAF is not supported).
+	var _animFrame;
+
 }(window, document));
