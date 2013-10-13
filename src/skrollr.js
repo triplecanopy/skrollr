@@ -1428,7 +1428,7 @@
 		if(_forceHeight && !_isMobile) {
 			//"force" the height.
 			var clientSize = _scrollHorizontal ? documentElement.clientWidth : documentElement.clientHeight;
-			//body.style[size] = (_maxKeyFrame + clientSize) + 'px';
+			body.style[size] = (_maxKeyFrame + clientSize) + 'px';
 		}
 
 		//The scroll offset may now be larger than needed (on desktop the browser/os prevents scrolling farther than the bottom).
