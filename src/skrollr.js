@@ -818,7 +818,7 @@
 
 				if(kf.isPercentage) {
 					//Convert the offset to percentage of the viewport height.
-					offset = offset * documentElement.clientHeight;
+					offset = offset * (_scrollHorizontal ? documentElement.clientWidth : documentElement.clientHeight);
 
 					//Absolute + percentage mode.
 					kf.frame = offset;
