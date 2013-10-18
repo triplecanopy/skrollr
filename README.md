@@ -1,6 +1,6 @@
 [![Build Status](https://secure.travis-ci.org/Prinzhorn/skrollr.png)](http://travis-ci.org/Prinzhorn/skrollr)
 
-skrollr 0.6.9
+skrollr 0.6.10
 =====
 
 Stand-alone **parallax scrolling** JavaScript library for **mobile (Android, iOS, etc.) and desktop** in just over **9.6k** (minified) or **4.5k** (minified + gzipped).
@@ -411,6 +411,37 @@ skrollr ships with some built in functions:
 * easeOutCubic
 * bounce: Bounces like a ball. See https://www.desmos.com/calculator/tbr20s8vd2 for a graphical representation.
 
+### Events
+Skrollr is capable of emitting events when the before, between and after classes are applied. This behaviour is optional and disabled by default.
+
+It can however come in handy if you need to run some logic when a given element is at a specific position on the page. This could be lazy loading images, updating the active tab of your menu or playing some video or audio.
+
+To enable the event emitting, simply set `emitEvents: true` in the skrollr instantiation like this
+
+```js
+skrollr.init({
+	emitEvents: true
+});
+
+```
+
+The events are emitted on the dom document itself and are named; `skrollrBefore`, `skrollrBetween` and `skrollrAfter`.
+
+In order to bind an eventListener to the event you would to something like this;
+
+```js
+
+var eventHandler = function(e) {
+	// This is the funky logic that will be run when the event fires
+};
+
+// Native JS
+document.getElementById('element-1').addEventListener('skrollrBefore', eventHandler);
+
+// jQuery
+jQuery('#element-1').on('skrollrBefore', eventHandler);
+```
+
 skrollr.get()
 -----
 
@@ -495,6 +526,11 @@ Removes the listener for the given event.
 
 Changelog
 =====
+
+0.6.10 (2013-07-30)
+-----
+
+* Fixed bug which caused IE to perform an endless loop (#271).
 
 0.6.9 (2013-07-01)
 -----

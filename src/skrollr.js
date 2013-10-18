@@ -41,6 +41,15 @@
 	var SKROLLABLE_BETWEEN_CLASS = SKROLLABLE_CLASS + '-between';
 	var SKROLLABLE_AFTER_CLASS = SKROLLABLE_CLASS + '-after';
 
+	var SKROLLABLE_EMIT_EVENTS = false;
+	var SKROLLABLE_OLD_IE_EVENTS = !document.createEvent;
+	var SKROLLABLE_CACHED_EVENTS = {};
+
+	var SKROLLABLE_EVENT = 'skrollr';
+	var SKROLLABLE_EVENT_BEFORE = SKROLLABLE_EVENT + 'Before';
+	var SKROLLABLE_EVENT_BETWEEN = SKROLLABLE_EVENT + 'Between';
+	var SKROLLABLE_EVENT_AFTER = SKROLLABLE_EVENT + 'After';
+
 	var SKROLLR_CLASS = 'skrollr';
 	var NO_SKROLLR_CLASS = 'no-' + SKROLLR_CLASS;
 	var SKROLLR_DESKTOP_CLASS = SKROLLR_CLASS + '-desktop';
@@ -229,6 +238,21 @@
 
 		options = options || {};
 
+		//Set emit events flag and prepare the events
+		if(options.emitEvents === true && !SKROLLABLE_OLD_IE_EVENTS) {
+			SKROLLABLE_EMIT_EVENTS = options.emitEvents;
+
+			//Cache the events
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_BEFORE] = document.createEvent('Event');
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_BEFORE].initEvent(SKROLLABLE_EVENT_BEFORE, true, true);
+
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_BETWEEN] = document.createEvent('Event');
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_BETWEEN].initEvent(SKROLLABLE_EVENT_BETWEEN, true, true);
+
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_AFTER] = document.createEvent('Event');
+			SKROLLABLE_CACHED_EVENTS[SKROLLABLE_EVENT_AFTER].initEvent(SKROLLABLE_EVENT_AFTER, true, true);
+		}
+
 		_constants = options.constants || {};
 
 		//We allow defining custom easings or overwrite existing.
@@ -301,7 +325,6 @@
 				_requestReflow = true;
 			}
 		});
-
 
 		var requestAnimFrame = polyfillRAF();
 
@@ -970,7 +993,7 @@
 	 * Renders all elements.
 	 */
 	var _render = function() {
-    if(_requestReflow) {
+		if(_requestReflow) {
 			_requestReflow = false;
 			_reflow();
 		}
@@ -1480,6 +1503,35 @@
 	 * or if remove is ommited add is a string and overwrites all classes.
 	 */
 	var _updateClass = function(element, add, remove) {
+		//Emit skrollr event if enabled
+		if (SKROLLABLE_EMIT_EVENTS) {
+			var addIndex = 0;
+			var eventType = null;
+
+			for(; addIndex < add.length; addIndex++) {
+				switch (add[addIndex]) {
+					case SKROLLABLE_BEFORE_CLASS:
+						eventType = SKROLLABLE_EVENT_BEFORE;
+					break;
+					case SKROLLABLE_BETWEEN_CLASS:
+						eventType = SKROLLABLE_EVENT_BETWEEN;
+					break;
+					case SKROLLABLE_AFTER_CLASS:
+						eventType = SKROLLABLE_EVENT_AFTER;
+					break;
+				}
+
+				if (eventType) {
+					break;
+				}
+			}
+
+			if (eventType) {
+				_emitEvent(element, eventType);
+			}
+		}
+
+
 		var prop = 'className';
 
 		//SVG support by using className.baseVal instead of just className.
@@ -1519,6 +1571,16 @@
 		}
 
 		element[prop] = _trim(val);
+	};
+
+	var _emitEvent = function(element, eventName) {
+		try {
+			if(!SKROLLABLE_OLD_IE_EVENTS) {
+				element.dispatchEvent(SKROLLABLE_CACHED_EVENTS[eventName]);
+			} else {
+				element.fireEvent('on' + eventName);
+			}
+		} catch (err) { /* Fail silently.. */ }
 	};
 
 	var _trim = function(a) {
@@ -1601,7 +1663,7 @@
 	//The last time we called the render method (doesn't mean we rendered!).
 	var _lastRenderCall = _now();
 
-  //For detecting if it actually resized (#271).
+	//For detecting if it actually resized (#271).
 	var _lastViewportWidth = 0;
 	var _lastViewportHeight = 0;
 
