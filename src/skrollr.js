@@ -796,7 +796,9 @@
 
 					duration = duration * (1 - targetRatio);
 
-					_instance.animateTo(targetTop, {easing: 'outCubic', duration: duration});
+					if (!_instance.isAnimatingTo()) {
+						_instance.animateTo(targetTop, {easing: 'outCubic', duration: duration});
+					}
 					break;
 			}
 		});
