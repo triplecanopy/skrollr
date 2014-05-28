@@ -337,6 +337,10 @@
 		return _instance;
 	}
 
+	Skrollr.prototype.isMobile = function() {
+		return _isMobile;
+	};
+
 	/**
 	 * (Re)parses some or all elements.
 	 */
@@ -796,9 +800,7 @@
 
 					duration = duration * (1 - targetRatio);
 
-					if (!_instance.isAnimatingTo()) {
-						_instance.animateTo(targetTop, {easing: 'outCubic', duration: duration});
-					}
+					_instance.animateTo(targetTop, {easing: 'outCubic', duration: duration});
 					break;
 			}
 		});

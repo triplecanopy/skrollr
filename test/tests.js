@@ -1,12 +1,13 @@
 $(window).on('load', function() {
 
-
 //Initialize skrollr and save the instance.
 var s = skrollr.init({
 	edgeStrategy: 'set',
 	constants: {
 		myconst: 300,
-		my500: 500
+		my500: function() {
+			return 500;
+		}
 	},
 	easing: {
 		half1: function() {
@@ -23,9 +24,15 @@ var countAssertions = function(tests) {
 		var curTest = tests[i];
 
 		if(curTest.styles) {
-			for(var k in curTest.styles) {
-				counter += Object.prototype.hasOwnProperty.call(curTest.styles, k);
-			}
+			$.each(curTest.styles, function() {
+				counter++;
+			});
+		}
+
+		if(curTest.attributes) {
+			$.each(curTest.attributes, function() {
+				counter++;
+			});
 		}
 
 		counter += !!curTest.selector;
@@ -57,11 +64,16 @@ var scrollTests = function(offset, tests) {
 				var curTest = tests[i];
 
 				if(curTest.styles) {
-					for(var k in curTest.styles) {
-						if(Object.prototype.hasOwnProperty.call(curTest.styles, k)) {
-							QUnit.numericCSSPropertyEquals(curTest.element.css(k), curTest.styles[k], curTest.message || 'element\'s (#' + curTest.element[0].id + ') "' + k + '" CSS property is correct');
-						}
-					}
+					$.each(curTest.styles, function(k) {
+						QUnit.numericCSSPropertyEquals(curTest.element.css(k), curTest.styles[k], curTest.message || 'element\'s (#' + curTest.element[0].id + ') "' + k + '" CSS property is correct');
+					});
+				}
+
+				if(curTest.attributes) {
+					$.each(curTest.attributes, function(k, value) {
+						console.log(curTest.element.prop(k));
+						QUnit.numericCSSPropertyEquals(curTest.element.attr(k), curTest.attributes[k], curTest.message || 'element\'s (#' + curTest.element[0].id + ') "' + k + '" attribute is correct');
+					});
 				}
 
 				if(curTest.selector) {
@@ -85,7 +97,7 @@ s.refresh(newElement[0]);
 module('basic stuff');
 
 test('CSS classes present', function() {
-	strictEqual($('.skrollable').length, 19, 'All elements have the .skrollable class');
+	strictEqual($('.skrollable').length, 23, 'All elements have the .skrollable class');
 
 	ok($('html').is('.skrollr'), 'HTML element has skrollr class');
 	ok($('html').is(':not(.no-skrollr)'), 'HTML element does not have no-skrollr class');
@@ -172,6 +184,20 @@ scrollTests(500, [
 		styles: {
 			float: 'left'
 		}
+	},
+	{
+		message: 'z-index "auto" is no converted to a number (#351)',
+		element: $('#auto-z-index'),
+		styles: {
+			zIndex: 'auto'
+		}
+	},
+	{
+		message: 'attribute interpolation',
+		element: $('#attr'),
+		attributes: {
+			title: '0'
+		}
 	}
 ]);
 
@@ -238,6 +264,21 @@ scrollTests(0, [
 		element: $('#float'),
 		styles: {
 			float: 'none'
+		}
+	},
+	{
+		message: 'z-index "auto" is no converted to a number (#351)',
+		element: $('#auto-z-index'),
+		styles: {
+			zIndex: '1'
+		}
+	},
+	{
+		message: 'attribute interpolation',
+		element: $('#attr'),
+		attributes: {
+			title: '500',
+			'data-test': 'skrollr'
 		}
 	}
 ]);
@@ -314,6 +355,51 @@ scrollTests(250, [
 		element: $('#float'),
 		styles: {
 			float: 'none'
+		}
+	},
+	{
+		message: 'attribute interpolation',
+		element: $('#attr'),
+		attributes: {
+			title: '250',
+			'data-test': 'skrollr'
+		}
+	}
+]);
+
+//bottom-top + 50%
+scrollTests(150, [
+	{
+		element: $('#relative-percentage-offset'),
+		styles: {
+			left: '250px'
+		}
+	}
+]);
+
+//200%
+scrollTests(600, [
+	{
+		element: $('#percentage-offset'),
+		styles: {
+			left: '500px'
+		}
+	},
+	{
+		message: 'attribute interpolation',
+		element: $('#attr'),
+		attributes: {
+			'data-test': 'skrollr-test'
+		}
+	}
+]);
+
+//100%
+scrollTests(300, [
+	{
+		element: $('#percentage-offset'),
+		styles: {
+			left: '250px'
 		}
 	}
 ]);
